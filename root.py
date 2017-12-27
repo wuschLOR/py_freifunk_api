@@ -11,7 +11,7 @@ if sys.version_info[0] != 3:
 
 import requests
 import json
-
+import paho.mqtt.publish as mqttpublish
 
 ## helpfunctions
 
@@ -53,6 +53,8 @@ for node_id in node_ids:
     resp_nodeinfo = requests.get("https://monitoring.freifunk-franken.de/routers/{}?json".format(node_id))
     
     clients.append(int(resp_nodeinfo.json()["clients"]))
+    #                   "world/fff/clients/nodenumber"
+    mqttpublish.single("world/fff/{}/clients".format(node_id), int(resp_nodeinfo.json()["clients"]), hostname="localhost")
 
     #print(resp_nodeinfo.json()["clients"])
     #print(resp_nodeinfo.json()["status"])
@@ -62,3 +64,6 @@ for node_id in node_ids:
     
 print(clients)
 print(sum(clients))
+
+mqttpublish.single("world/fff/all/clients", sum(clients), hostname="localhost")
+
