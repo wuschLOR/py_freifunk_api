@@ -1,3 +1,10 @@
+'''
+testing
+mosquitto_sub -v -h localhost -t '#'
+mosquitto_sub -v -h localhost -t "world/fff/+/clients" -T "world/fff/all/#"
+mosquitto_sub -v -h localhost -t "world/fff/all/clients"
+'''
+
 
 ## libs
 import sys
@@ -32,40 +39,47 @@ def is_int_able(intablestring):
 # request api for user owned routers
 resp_userinfo = requests.get("https://monitoring.freifunk-franken.de/api/routers_by_nickname/wu")
 
-# generate router tuple
+if resp_userinfo.ok:
 
-nodes = resp_userinfo.json()['nodes']
+    # generate router tuple
 
-node_ids = []
+    nodes = resp_userinfo.json()['nodes']
 
-for node in nodes:
-    #print (node['name'])
-    #print (node['oid'])
-    node_ids.append(node['oid'])
+    node_ids = []
+
+    for node in nodes:
+        #print (node['name'])
+        #print (node['oid'])
+        node_ids.append(node['oid'])
 
 
-print(node_ids)
+    print(node_ids)
 
-# gen clientcount
+    # gen clientcount
 
-clients = []
+    clients = []
 
-for node_id in node_ids:
-    #print(node_id)
-    resp_nodeinfo = requests.get(
-        "https://monitoring.freifunk-franken.de/routers/{}?json".format(node_id)
-        )
-    #print(resp_nodeinfo.json()["clients"])
-    #print(resp_nodeinfo.json()["status"])
-    #print(resp_nodeinfo.json()["hostname"])
-    #print(resp_nodeinfo.json()["position_comment"])
-    clients.append(int(resp_nodeinfo.json()["clients"]))
-    #                   "world/fff/clients/nodenumber"
-    mqttpublish.single("world/fff/{}/clients".format(node_id), int(resp_nodeinfo.json()["clients"]), hostname="localhost")
+    for node_id in node_ids:
+        #print(node_id)
+        resp_nodeinfo = requests.get(
+            "https://monitoring.freifunk-franken.de/routers/{}?json".format(node_id)
+            )
+        if resp_nodeinfo.ok:
+            #print(resp_nodeinfo.json()["clients"])
+            #print(resp_nodeinfo.json()["status"])
+            #print(resp_nodeinfo.json()["hostname"])
+            #print(resp_nodeinfo.json()["position_comment"])
+            clients.append(int(resp_nodeinfo.json()["clients"]))
+            #                   "world/fff/clients/nodenumber"
+            mqttpublish.single("world/fff/{}/clients".format(node_id), int(resp_nodeinfo.json()["clients"]), hostname="localhost")
+        else:
+            print("nodeinfo error")
+        
+    print(clients)
+    print(sum(clients))
 
+    mqttpublish.single("world/fff/all/clients", sum(clients), hostname="localhost")
     
-print(clients)
-print(sum(clients))
-
-mqttpublish.single("world/fff/all/clients", sum(clients), hostname="localhost")
+else:
+    print('userinfo error')
 
