@@ -1,33 +1,36 @@
-## checks
 
+## libs
 import sys
+import requests
+import paho.mqtt.publish as mqttpublish
 
+
+## checks
 if sys.version_info[0] != 3:
     print("This script requires Python 3")
     exit()
 
 
-## libs
 
-import requests
-import json
-import paho.mqtt.publish as mqttpublish
 
 ## helpfunctions
 
 # https://stackoverflow.com/a/20988982
-def is_int_able(x):
-  try:
-     int(x)
-     return True
-  except ValueError:
-     return False
+def is_int_able(intablestring):
+    '''
+    trys to convert a str to number via int()
+    '''
+    try:
+        int(intablestring)
+        return True
+    except ValueError:
+        return False
 
 
 ## script
 
 # request api for user owned routers
-resp_userinfo= requests.get("https://monitoring.freifunk-franken.de/api/routers_by_nickname/wu")
+resp_userinfo = requests.get("https://monitoring.freifunk-franken.de/api/routers_by_nickname/wu")
 
 # generate router tuple
 
@@ -49,18 +52,17 @@ clients = []
 
 for node_id in node_ids:
     #print(node_id)
-    
-    resp_nodeinfo = requests.get("https://monitoring.freifunk-franken.de/routers/{}?json".format(node_id))
-    
-    clients.append(int(resp_nodeinfo.json()["clients"]))
-    #                   "world/fff/clients/nodenumber"
-    mqttpublish.single("world/fff/{}/clients".format(node_id), int(resp_nodeinfo.json()["clients"]), hostname="localhost")
-
+    resp_nodeinfo = requests.get(
+        "https://monitoring.freifunk-franken.de/routers/{}?json".format(node_id)
+        )
     #print(resp_nodeinfo.json()["clients"])
     #print(resp_nodeinfo.json()["status"])
     #print(resp_nodeinfo.json()["hostname"])
     #print(resp_nodeinfo.json()["position_comment"])
-    
+    clients.append(int(resp_nodeinfo.json()["clients"]))
+    #                   "world/fff/clients/nodenumber"
+    mqttpublish.single("world/fff/{}/clients".format(node_id), int(resp_nodeinfo.json()["clients"]), hostname="localhost")
+
     
 print(clients)
 print(sum(clients))
