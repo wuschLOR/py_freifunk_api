@@ -28,8 +28,6 @@ notifyme = True
 notify2.init('freifunkapi2mqtt')
 
 
-
-
 ## helpfunctions
 
 # https://stackoverflow.com/a/20988982
@@ -45,6 +43,7 @@ def is_int_able(intablestring):
 
 
 ## funtions
+
 def get_node_ids(username):
     '''
     fetch node ids for given username
@@ -83,20 +82,22 @@ def fetch_and_publish_nodeinfo(node_id):
     
     return(int(resp_nodeinfo.json()["clients"]))
     
+    
+    
 
-## script
+if __name__ == "__main__":
 
-node_ids = get_node_ids('wu')
+    node_ids = get_node_ids('wu')
 
-clients = []
+    clients = []
 
-for node_id in node_ids:
-    clients.append(fetch_and_publish_nodeinfo(node_id))
+    for node_id in node_ids:
+        clients.append(fetch_and_publish_nodeinfo(node_id))
 
-mqttpublish.single("world/fff/all/clients", sum(clients), hostname="localhost")
+    mqttpublish.single("world/fff/all/clients", sum(clients), hostname="localhost")
 
-if notifyme:
-    n = notify2.Notification('current freifunk clients', str(sum(clients)))
-    n.show()
+    if notifyme:
+        n = notify2.Notification('current freifunk clients', str(sum(clients)))
+        n.show()
 
 
