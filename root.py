@@ -43,38 +43,60 @@ def is_int_able(intablestring):
     except ValueError:
         return False
 
-## script
 
-# request api for user owned routers
-resp_userinfo = requests.get("https://monitoring.freifunk-franken.de/api/routers_by_nickname/wu")
-
-if resp_userinfo.ok:
-    # generate router tuple
-    nodes = resp_userinfo.json()['nodes']
+## funtions
+def get_node_ids(username):
+    '''
+    fetch node ids for given username
+    '''
+    # request api for user owned routers
+    resp_userinfo = requests.get("https://monitoring.freifunk-franken.de/api/routers_by_nickname/{}".format(username))
+    
     node_ids = []
     
-    for node in nodes:
-        #dict['name''oid']
-        node_ids.append(node['oid'])
-
-    clients = []
-
-    for node_id in node_ids:
-        #print(node_id)
-        resp_nodeinfo = requests.get("https://monitoring.freifunk-franken.de/routers/{}?json".format(node_id))
-        if resp_nodeinfo.ok:
-            #dict:["clients""status""hostname""position_comment"]
-            clients.append(int(resp_nodeinfo.json()["clients"]))
-            #"world/fff/clients/nodenumber"
-            mqttpublish.single("world/fff/{}/clients".format(node_id), int(resp_nodeinfo.json()["clients"]), hostname="localhost")
-        else:
-            print("nodeinfo error")
-
-    mqttpublish.single("world/fff/all/clients", sum(clients), hostname="localhost")
+    if resp_userinfo.ok:
+        # generate node tuple
+        nodes = resp_userinfo.json()['nodes']
+        for node in nodes:
+            #dict['name''oid']
+            node_ids.append(node['oid'])
+    else:
+        print('userinfo error')
     
-    if notifyme:
-        n = notify2.Notification('current freifunk clients', str(sum(clients)))
-        n.show()
-else:
-    print('userinfo error')
+    return(node_ids)
+    
+    
+def fetch_and_publish_nodeinfo(node_id):
+    '''
+    fetches infos about the node and publishes it to mqtt
+    returns clients
+    '''
+    resp_nodeinfo = requests.get("https://monitoring.freifunk-franken.de/routers/{}?json".format(node_id))
+    
+    if resp_nodeinfo.ok:
+        #dict:["clients""status""hostname""position_comment"]
+        #"world/fff/clients/nodenumber"
+        mqttpublish.single("world/fff/{}/clients".format(node_id), int(resp_nodeinfo.json()["clients"]), hostname="localhost")
+        
+    else:
+        print("nodeinfo error")
+    
+    return(int(resp_nodeinfo.json()["clients"]))
+    
+
+## script
+
+node_ids = get_node_ids('wu')
+
+clients = []
+
+for node_id in node_ids:
+    clients.append(fetch_and_publish_nodeinfo(node_id))
+
+mqttpublish.single("world/fff/all/clients", sum(clients), hostname="localhost")
+
+if notifyme:
+    n = notify2.Notification('current freifunk clients', str(sum(clients)))
+    n.show()
+
 
