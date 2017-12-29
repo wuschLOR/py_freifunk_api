@@ -20,8 +20,14 @@ if sys.version_info[0] != 3:
     print("This script requires Python 3")
     exit()
 
+
+## conditionals to get from enviorment later
+notifyme = True
+
 # init notifications
 notify2.init('freifunkapi2mqtt')
+
+
 
 
 ## helpfunctions
@@ -65,8 +71,10 @@ if resp_userinfo.ok:
             print("nodeinfo error")
 
     mqttpublish.single("world/fff/all/clients", sum(clients), hostname="localhost")
-    n = notify2.Notification('current freifunk clients', str(sum(clients)))
-    n.show()
+    
+    if notifyme:
+        n = notify2.Notification('current freifunk clients', str(sum(clients)))
+        n.show()
 else:
     print('userinfo error')
 
