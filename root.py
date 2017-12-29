@@ -5,28 +5,18 @@ mosquitto_sub -v -h localhost -t "world/fff/+/clients" -T "world/fff/all/#"
 mosquitto_sub -v -h localhost -t "world/fff/all/clients"
 '''
 
-
-
-
-## libs
-import sys
-import requests
-import paho.mqtt.publish as mqttpublish
-import notify2
-
-
 ## checks
+import sys
+
 if sys.version_info[0] != 3:
     print("This script requires Python 3")
     exit()
 
 
-## conditionals to get from enviorment later
-notifyme = True
+## libs
 
-# init notifications
-notify2.init('freifunkapi2mqtt')
-
+import requests
+import paho.mqtt.publish as mqttpublish
 
 ## helpfunctions
 
@@ -86,18 +76,30 @@ def fetch_and_publish_nodeinfo(node_id):
     
 
 if __name__ == "__main__":
+    
+    import notify2
+    
+    ## conditionals to get from enviorment later
+    notifyme = True
+    users = ['wu','wuex']
 
-    node_ids = get_node_ids('wu')
+    # init notifications
+    notify2.init('freifunkapi2mqtt')
 
-    clients = []
+    
+    for user in users:
+        
+        node_ids = get_node_ids(user)
 
-    for node_id in node_ids:
-        clients.append(fetch_and_publish_nodeinfo(node_id))
+        clients = []
 
-    mqttpublish.single("world/fff/all/clients", sum(clients), hostname="localhost")
+        for node_id in node_ids:
+            clients.append(fetch_and_publish_nodeinfo(node_id))
 
-    if notifyme:
-        n = notify2.Notification('current freifunk clients', str(sum(clients)))
-        n.show()
+        mqttpublish.single("world/fff/all/clients", sum(clients), hostname="localhost")
+
+        if notifyme:
+            n = notify2.Notification('current freifunk clients for {}'.format(user), str(sum(clients)))
+            n.show()
 
 
