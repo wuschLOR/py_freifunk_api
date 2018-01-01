@@ -17,6 +17,7 @@ if sys.version_info[0] != 3:
 
 import requests
 import paho.mqtt.publish as mqttpublish
+import notify2
 
 
 ## config
@@ -25,7 +26,9 @@ FREIFUNKFRANKEN_USER_NODE_QUERRY_URL = "https://monitoring.freifunk-franken.de/a
 FREIFUNKFRANKEN_NODE_QUERRY_URL      = "https://monitoring.freifunk-franken.de/routers/{}?json"
 #            lacation/type/user/node_id/dataform
 MQTT_PATH = "world/fff/{}/{}/{}"
-
+MQTT_HOST = 'localhost'
+NOTIFICATIONS_TITLE = 'freifunkapi2mqtt'
+NOTIFICATIONS_FLUFF = 'current freifunk clients for {}'
 
 ## funtions
 
@@ -124,18 +127,32 @@ class FreifunkClient(object):
     '''
     Client for data management 
     '''
-    def __init__(self, username, api_url_user_nodes=None, api_url_nodes=None):
+    def __init__(self, 
+                 username, 
+                 api_url_user_nodes=FREIFUNKFRANKEN_USER_NODE_QUERRY_URL, 
+                 api_url_nodes=FREIFUNKFRANKEN_NODE_QUERRY_URL):
+        # main
         self.username = username
-        if api_url_user_nodes:
-            self.api_url_user_nodes = api_url_user_nodes
-        else:
-            self.api_url_user_nodes = FREIFUNKFRANKEN_USER_NODE_QUERRY_URL
-        
-        if api_url_nodes:
-            self.api_url_nodes = api_url_nodes
-        else:
-            self.api_url_nodes = FREIFUNKFRANKEN_NODE_QUERRY_URL
+        self.api_url_user_nodes = api_url_user_nodes
+        self.api_url_nodes = api_url_nodes
+        # conditionals    
+        self.notifications_status = False
+        self.mqtt_status = False
             
+    def init_notifications(self, 
+                           notifications_title=NOTIFICATIONS_TITLE, 
+                           notifications_fluff=NOTIFICATIONS_FLUFF):
+        self.notifications_title  = notifications_title
+        self.notifications_fluff  = notifications_fluff
+        self.notifications_status = True
+        
+    def init_mqtt(self,
+                  mqtt_host=MQTT_HOST, 
+                  mqtt_path=MQTT_PATH):
+        self.mqtt_host = MQTT_HOST
+        self.mqtt_path = mqtt_path            
+        self.mqtt_status = True
+
     def fetch_user_node_data(self):
         user_node_api_response = requests.get(self.api_url_user_nodes.format(self.username))
         user_node_api_response_json = user_node_api_response.json()
@@ -146,7 +163,6 @@ class FreifunkClient(object):
         node_api_response_json = node_api_response.json()
         return(node_api_response_json)
 
-    
     def fetch_nodes(self):
         self.nodes=[]
         for nodeid in self.node_ids:
@@ -155,24 +171,19 @@ class FreifunkClient(object):
 
     
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
     
-#import freifunkapi2mqtt
-#fff=freifunkapi2mqtt.FreifunkClient('wu')
-#fff.fetch_user_data()
-
-    
-    
-    
-    import notify2
-    
-    ## conditionals to get from enviorment later
-    notifyme = True
     users = ['wu','wuex']
 
     # init notifications
-    notify2.init('freifunkapi2mqtt')
+    notify2.init(NOTIFICATIONS_TITLE)
 
+    fff=FreifunkClient('wu')
+    fff.init_mqtt()
+    fff.init_notifications()
+    fff.fetch_user_node_data()
+    
+    ## old
     
     for user in users:
         
