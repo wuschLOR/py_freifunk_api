@@ -19,7 +19,6 @@ import requests
 import paho.mqtt.publish as mqttpublish
 import notify2
 
-
 ## config
 
 FREIFUNKFRANKEN_USER_NODE_QUERRY_URL = "https://monitoring.freifunk-franken.de/api/routers_by_nickname/{}"
@@ -81,13 +80,14 @@ class Node(object):
     """
     Turns a nodedictionary into a class
     """
-    def __init__(self, ipv6,mac,name,oid):
+    def __init__(self, oid, name, ipv6_fe80_addr, mac):
         # main info
-        self.ipv6             = ipv6
-        self.mac              = mac
+        self.oid              = int(oid)
         self.name             = name
-        self.oid              = oid
+        self.ipv6_fe80_addr   = ipv6_fe80_addr
+        self.mac              = mac
         # extended info
+        self.user             = None
         self.hood             = None
         self.firmware         = None
         self.contact          = None
@@ -98,7 +98,10 @@ class Node(object):
         self.status           = None
         self.sys_uptime       = None
         self.clients          = None
-        '''
+
+    def extend_with_node_api_response(self, node_api_response):
+        node_api_response_json = node_api_response.json()
+        self.user             = node_api_response_json['user']
         self.hood             = node_api_response_json['hood']
         self.firmware         = node_api_response_json['firmware']
         self.contact          = node_api_response_json['contact']
@@ -109,12 +112,13 @@ class Node(object):
         self.status           = node_api_response_json['status']
         self.sys_uptime       = node_api_response_json['sys_uptime']
         self.clients          = node_api_response_json['clients']
-        '''
+        
     def is_online(self):
         return (self.status == 'online')
     
     def has_clients(self):
         return (self.clients>0)
+
 
 class User(object):
     '''user_node_api_response_json
@@ -133,6 +137,9 @@ class FreifunkClient(object):
                  api_url_nodes=FREIFUNKFRANKEN_NODE_QUERRY_URL):
         # main
         self.username = username
+        self.nodes=[]
+        self.node_count = 0
+        self.client_count= 0
         self.api_url_user_nodes = api_url_user_nodes
         self.api_url_nodes = api_url_nodes
         # conditionals    
@@ -144,6 +151,7 @@ class FreifunkClient(object):
                            notifications_fluff=NOTIFICATIONS_FLUFF):
         self.notifications_title  = notifications_title
         self.notifications_fluff  = notifications_fluff
+        notify2.init(self.notifications_title)
         self.notifications_status = True
         
     def init_mqtt(self,
@@ -156,17 +164,39 @@ class FreifunkClient(object):
     def fetch_user_node_data(self):
         user_node_api_response = requests.get(self.api_url_user_nodes.format(self.username))
         user_node_api_response_json = user_node_api_response.json()
-        return(user_node_api_response_json)
-    
-    def fetch_node_data(self, node_id):
-        node_api_response = requests.get(self.api_url_nodes.format(node_id))
-        node_api_response_json = node_api_response.json()
-        return(node_api_response_json)
+        nodes_list = user_node_api_response_json['nodes']
+        for node_item in nodes_list:
+            node = Node(oid            = node_item['oid'],
+                        name           = node_item['name'],
+                        ipv6_fe80_addr = node_item['ipv6_fe80_addr'],
+                        mac            = node_item['mac'])
+            self.nodes.append(node)
+            
+        self.node_count=len(self.nodes)
+        
+    def publish_clients(self):
+        total_clients=sum(node.clients for node in self.nodes if node.clients is not None)
+        if self.mqtt_status:
+            mqttpublish.single(self.mqtt_path.format(self.username,'all','clients'), 
+                               total_clients, 
+                               hostname=self.mqtt_host)
+            for i in range(0,len(self.nodes)):
+                mqttpublish.single(self.mqtt_path.format(self.username,self.nodes[i].oid,'clients'), 
+                                self.nodes[i].clients, 
+                                hostname=self.mqtt_host)                
+            
+        if self.notifications_status:
+            n = notify2.Notification('current freifunk clients for {}'.format(self.username), 
+                                     str(total_clients))
+            n.show()
+            for i in range(0,len(self.nodes)):
+                pass
 
-    def fetch_nodes(self):
-        self.nodes=[]
-        for nodeid in self.node_ids:
-            seld.nodes.append(self.fetch_node_data(node_id))
+    def update_nodes(self):
+        for i in range(0,len(self.nodes)):
+            node_api_response = requests.get(self.api_url_nodes.format(self.nodes[i].oid))
+            self.nodes[i].extend_with_node_api_response(node_api_response)
+
             
 
     
@@ -176,15 +206,18 @@ if __name__ == "__main__":
     users = ['wu','wuex']
 
     # init notifications
-    notify2.init(NOTIFICATIONS_TITLE)
 
-    fff=FreifunkClient('wu')
-    fff.init_mqtt()
-    fff.init_notifications()
-    fff.fetch_user_node_data()
+    fff_wu=FreifunkClient('wu')
+    fff_wu.init_mqtt()
+    fff_wu.init_notifications()
+    fff_wu.fetch_user_node_data()
+    fff_wu.update_nodes()
+    fff_wu.publish_clients()
+    
+    
     
     ## old
-    
+    '''
     for user in users:
         
         node_ids = get_node_ids(user)
@@ -200,4 +233,13 @@ if __name__ == "__main__":
             n = notify2.Notification('current freifunk clients for {}'.format(user), str(sum(clients)))
             n.show()
 
-
+    '''
+'''
+import freifunkapi2mqtt                        
+fff=freifunkapi2mqtt.FreifunkClient('wu')      
+fff.init_mqtt()
+fff.init_notifications()
+fff.fetch_user_node_data()
+fff.update_nodes()
+fff.publish_clients()
+'''
