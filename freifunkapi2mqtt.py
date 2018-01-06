@@ -1,8 +1,5 @@
 '''
-testing
-mosquitto_sub -v -h localhost -t '#'
-mosquitto_sub -v -h localhost -t "world/fff/+/clients" -T "world/fff/all/#"
-mosquitto_sub -v -h localhost -t "world/fff/all/clients"
+put help text here
 '''
 
 ## checks
@@ -19,6 +16,7 @@ import requests
 import paho.mqtt.publish as mqttpublish
 import notify2
 import time
+import threading
 
 ## config
 
@@ -30,51 +28,9 @@ MQTT_HOST = 'localhost'
 NOTIFICATIONS_TITLE = 'freifunkapi2mqtt'
 NOTIFICATIONS_FLUFF = 'current freifunk clients for {}'
 
-## funtions
+PULBISHING_CYCLE = 300 # every 5 minutes
 
-def get_node_ids(username):
-    '''
-    fetch node ids for given username
-    '''
-    # request api for user owned routers
-    user_node_api_response = requests.get(FREIFUNKFRANKEN_USER_NODE_QUERRY_URL.format(username))
-    user_node_api_response_json = user_node_api_response.json()
-    
-    node_ids = []
-    
-    if user_node_api_response.ok:
-        # generate node tuple
-        nodes = user_node_api_response_json['nodes']
-        for node in nodes:
-            #dict['name''oid']
-            node_ids.append(node['oid'])
-    else:
-        print('userinfo error')
-    
-    return(node_ids)
-    
-    
-def fetch_and_publish_node_api_response(node_id):
-    '''
-    fetches infos about the node and publishes it to mqtt
-    returns clients
-    '''
-    resp_node_api_response = requests.get(FREIFUNKFRANKEN_NODE_QUERRY_URL.format(node_id))
-    
-    if resp_node_api_response.ok:
-        #dict:["clients""status""hostname""position_comment"]
-        #"world/fff/clients/nodenumber"
-        mqttpublish.single(MQTT_PATH.format('TEST',node_id,'clients'), int(resp_node_api_response.json()["clients"]), hostname="localhost")
-        
-    else:
-        print("node_api_response error")
-    
-    return(int(resp_node_api_response.json()["clients"]))
-    
 
-    
-
-    
 ## objects
 
 class Node(object):
@@ -121,36 +77,34 @@ class Node(object):
         return (self.clients>0)
 
 
-class User(object):
-    '''user_node_api_response_json
-    Turns a userdictionary into classuser_node_api_response_json
-    '''
-    def __init__(self):
-        pass
-
 class FreifunkClient(object):
     '''
-    Client for data management 
+    Client for FFF Node requestes and publishing 
     '''
     def __init__(self, 
                  username, 
                  api_url_user_nodes=FREIFUNKFRANKEN_USER_NODE_QUERRY_URL, 
-                 api_url_nodes=FREIFUNKFRANKEN_NODE_QUERRY_URL):
-        # main
+                 api_url_nodes=FREIFUNKFRANKEN_NODE_QUERRY_URL,
+                 pulbishing_cycle=PULBISHING_CYCLE):
+        # vars
         self.username = username
+        self.api_url_user_nodes = api_url_user_nodes
+        self.api_url_nodes      = api_url_nodes   
+        self.pulbishing_cycle   = pulbishing_cycle
+        
+        # main
         self.nodes=[]
         self.node_count = 0
         self.client_count= 0
-        self.api_url_user_nodes = api_url_user_nodes
-        self.api_url_nodes = api_url_nodes
-        # conditionals    
         self.notifications_status = False
         self.mqtt_status = False
-        self.pulbishing_cycle = 60
             
     def init_notifications(self, 
                            notifications_title=NOTIFICATIONS_TITLE, 
                            notifications_fluff=NOTIFICATIONS_FLUFF):
+        '''
+        set the notifications variables and inititates the notifications module
+        '''
         self.notifications_title  = notifications_title
         self.notifications_fluff  = notifications_fluff
         notify2.init(self.notifications_title)
@@ -159,11 +113,17 @@ class FreifunkClient(object):
     def init_mqtt(self,
                   mqtt_host=MQTT_HOST, 
                   mqtt_path=MQTT_PATH):
+        '''
+        set the mqtt variables
+        '''
         self.mqtt_host = MQTT_HOST
         self.mqtt_path = mqtt_path            
         self.mqtt_status = True
 
     def fetch_user_node_data(self):
+        '''
+        make api call and populate self.nodes with Nodes
+        '''
         user_node_api_response = requests.get(self.api_url_user_nodes.format(self.username))
         user_node_api_response_json = user_node_api_response.json()
         nodes_list = user_node_api_response_json['nodes']
@@ -177,10 +137,14 @@ class FreifunkClient(object):
         self.node_count=len(self.nodes)
         
     def publish_clients(self):
-        total_clients=sum(node.clients for node in self.nodes if node.clients is not None)
+        '''
+        publishes client data to the enabled destinations
+        * mqtt
+        * notifications
+        '''
         if self.mqtt_status:
             mqttpublish.single(self.mqtt_path.format(self.username,'all','clients'), 
-                               total_clients, 
+                               self.client_count, 
                                hostname=self.mqtt_host)
             for i in range(0,len(self.nodes)):
                 mqttpublish.single(self.mqtt_path.format(self.username,self.nodes[i].oid,'clients'), 
@@ -189,29 +153,44 @@ class FreifunkClient(object):
             
         if self.notifications_status:
             n = notify2.Notification('current freifunk clients for {}'.format(self.username), 
-                                     str(total_clients))
+                                     str(self.client_count))
             n.show()
             for i in range(0,len(self.nodes)):
                 pass
 
     def update_nodes(self):
+        '''
+        cycles throug nodes and overides current data with requested data
+        '''
         for i in range(0,len(self.nodes)):
             node_api_response = requests.get(self.api_url_nodes.format(self.nodes[i].oid))
             self.nodes[i].extend_with_node_api_response(node_api_response)
-
-    def continuous_publishing(self):
+            
+        self.client_count = sum(node.clients for node in self.nodes if node.clients is not None)
+            
+    def _continuous_publishing(self):
+        '''
+        just triggers an update_nodes and then a publish_clients
+        intended for threaded use
+        '''
         while True:
+            #print(self.username)
             self.update_nodes()
             self.publish_clients()
-            time.sleep(5)
+            time.sleep(self.pulbishing_cycle) 
+            
+    def continuous_publishing_threaded(self):
+        '''
+        strats a thread with _continuous_publishing
+        '''
+        threading.Thread(target=self._continuous_publishing).start()
 
-    
 
 if __name__ == "__main__": 
    
     users = ['wu','wuex']
     
-    
+    # create clients ready for threading
     fffcl=[]
     
     for usr in users:
@@ -222,39 +201,9 @@ if __name__ == "__main__":
         
         fffcl.append(cl)
         
-    jobs=[]
+    # run threads
     for cl in fffcl:
-        cl.continuous_publishing()
+        cl.continuous_publishing_threaded()
         
 
     
-    # init notifications
-
-    '''
-    fff_wu=FreifunkClient('wu')
-    fff_wu.init_mqtt()
-    fff_wu.init_notifications()
-    fff_wu.fetch_user_node_data()
-    fff_wu.update_nodes()
-    fff_wu.publish_clients()
-    
-    fff_wuex=FreifunkClient('wuex')
-    fff_wuex.init_mqtt()
-    fff_wuex.init_notifications()
-    fff_wuex.fetch_user_node_data()
-    fff_wuex.update_nodes()
-    fff_wuex.publish_clients()
-    '''
-  
-  
-  
-  
-'''
-import freifunkapi2mqtt                        
-fff=freifunkapi2mqtt.FreifunkClient('wu')      
-fff.init_mqtt()
-fff.init_notifications()
-fff.fetch_user_node_data()
-fff.update_nodes()
-fff.publish_clients()
-'''
