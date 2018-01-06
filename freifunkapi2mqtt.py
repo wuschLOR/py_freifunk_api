@@ -18,6 +18,7 @@ if sys.version_info[0] != 3:
 import requests
 import paho.mqtt.publish as mqttpublish
 import notify2
+import time
 
 ## config
 
@@ -145,6 +146,7 @@ class FreifunkClient(object):
         # conditionals    
         self.notifications_status = False
         self.mqtt_status = False
+        self.pulbishing_cycle = 60
             
     def init_notifications(self, 
                            notifications_title=NOTIFICATIONS_TITLE, 
@@ -197,16 +199,38 @@ class FreifunkClient(object):
             node_api_response = requests.get(self.api_url_nodes.format(self.nodes[i].oid))
             self.nodes[i].extend_with_node_api_response(node_api_response)
 
-            
+    def continuous_publishing(self):
+        while True:
+            self.update_nodes()
+            self.publish_clients()
+            time.sleep(5)
 
     
 
 if __name__ == "__main__": 
-    
+   
     users = ['wu','wuex']
+    
+    
+    fffcl=[]
+    
+    for usr in users:
+        cl=FreifunkClient(usr)
+        cl.init_mqtt()
+        cl.init_notifications()
+        cl.fetch_user_node_data()
+        
+        fffcl.append(cl)
+        
+    jobs=[]
+    for cl in fffcl:
+        cl.continuous_publishing()
+        
 
+    
     # init notifications
 
+    '''
     fff_wu=FreifunkClient('wu')
     fff_wu.init_mqtt()
     fff_wu.init_notifications()
@@ -214,26 +238,17 @@ if __name__ == "__main__":
     fff_wu.update_nodes()
     fff_wu.publish_clients()
     
-    
-    
-    ## old
+    fff_wuex=FreifunkClient('wuex')
+    fff_wuex.init_mqtt()
+    fff_wuex.init_notifications()
+    fff_wuex.fetch_user_node_data()
+    fff_wuex.update_nodes()
+    fff_wuex.publish_clients()
     '''
-    for user in users:
-        
-        node_ids = get_node_ids(user)
-
-        clients = []
-
-        for node_id in node_ids:
-            clients.append(fetch_and_publish_node_api_response(node_id))
-
-        mqttpublish.single(MQTT_PATH.format('TEST','all','clients'), sum(clients), hostname="localhost")
-
-        if notifyme:
-            n = notify2.Notification('current freifunk clients for {}'.format(user), str(sum(clients)))
-            n.show()
-
-    '''
+  
+  
+  
+  
 '''
 import freifunkapi2mqtt                        
 fff=freifunkapi2mqtt.FreifunkClient('wu')      
