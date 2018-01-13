@@ -180,9 +180,11 @@ class FreifunkClient(object):
         intended for threaded use
         '''
         while True:
-            #print(self.username)
-            self.update_nodes()
-            self.publish_clients()
+            try:
+                self.update_nodes()
+                self.publish_clients()
+            except:
+                pass
             time.sleep(self.pulbishing_cycle)
 
     def continuous_publishing_threaded(self):
@@ -194,7 +196,7 @@ class FreifunkClient(object):
 
 if __name__ == "__main__":
 
-    users = ['wu', 'wuex']
+    users = ['wu', 'wuex','backspace']
 
     # create clients ready for threading
     fffcl = []
@@ -202,7 +204,7 @@ if __name__ == "__main__":
     for usr in users:
         cl = FreifunkClient(usr)
         cl.init_mqtt()
-        cl.init_notifications()
+        #cl.init_notifications()
         cl.fetch_user_node_data()
 
         fffcl.append(cl)

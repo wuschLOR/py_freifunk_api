@@ -3,6 +3,8 @@
 ## test
 
 sudo apt-get install mosquitto mosquitto-clients
+sudo apt-get install python3-pip
+
 
 ## mqtt test
 mosquitto_sub -v -h localhost -t '#'
