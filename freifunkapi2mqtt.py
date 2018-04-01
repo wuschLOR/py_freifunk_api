@@ -40,7 +40,7 @@ logger.addHandler(ch)
 # 'application' code
 logger.debug('debug message')
 logger.info('info message')
-logger.warn('warn message')
+logger.warning('warn message')
 logger.error('error message')
 logger.critical('critical message')
 
@@ -56,11 +56,11 @@ MQTT_HOST = 'localhost'
 NOTIFICATIONS_TITLE = 'freifunkapi2mqtt'
 NOTIFICATIONS_FLUFF = 'current freifunk clients for {}'
 
-PULBISHING_CYCLE = 10  # every 5 minutes
-
+PUBLISHING_CYCLE = 10  # every 5 minutes
 
 # objects
 logger.info('defining config')
+
 
 class Node(object):
     """
@@ -120,12 +120,12 @@ class FreifunkClient(object):
                  username,
                  api_url_user_nodes=FREIFUNKFRANKEN_USER_NODE_QUERRY_URL,
                  api_url_nodes=FREIFUNKFRANKEN_NODE_QUERRY_URL,
-                 pulbishing_cycle=PULBISHING_CYCLE):
+                 publishing_cycle=PUBLISHING_CYCLE):
         # vars
         self.username = username
         self.api_url_user_nodes = api_url_user_nodes
         self.api_url_nodes = api_url_nodes
-        self.pulbishing_cycle = pulbishing_cycle
+        self.publishing_cycle = publishing_cycle
 
         # main
         self.nodes = []
@@ -139,7 +139,7 @@ class FreifunkClient(object):
                            notifications_title=NOTIFICATIONS_TITLE,
                            notifications_fluff=NOTIFICATIONS_FLUFF):
         """
-        set the notifications variables and inititates the notifications module
+        set the notifications variables and initiate the notifications module
         """
         self.notifications_title = notifications_title
         self.notifications_fluff = notifications_fluff
@@ -192,6 +192,7 @@ class FreifunkClient(object):
                                           'clients'),
                     self.nodes[i].clients,
                     hostname=self.mqtt_host)
+                logger.debug("FreifunkClient publish_clients " + str(self.mqtt_host)+ str(self.nodes[i].clients))
 
         if self.notifications_status:
             n = notify2.Notification('current freifunk clients for {}'.format(
@@ -204,7 +205,7 @@ class FreifunkClient(object):
 
     def update_nodes(self):
         """
-        cycles throug nodes and overides current data with requested data
+        cycles through nodes and overrides current data with requested data
         """
         for i in range(0, len(self.nodes)):
             node_api_response = requests.get(
@@ -224,19 +225,24 @@ class FreifunkClient(object):
         while True:
             try:
                 self.update_nodes()
-                self.publish_clients()
+                try:
+                    self.publish_clients()
+                except:
+                    logger.warning("FreifunkClient _continuous_publishing except publish_clients")
             except:
+                logger.warning("FreifunkClient _continuous_publishing except update_nodes")
                 pass
-            logger.debug("FreifunkClient _continuous_publishing cycle")
-            time.sleep(self.pulbishing_cycle)
 
+            logger.debug("FreifunkClient _continuous_publishing cycle ended")
+            time.sleep(self.publishing_cycle)
 
     def continuous_publishing_threaded(self):
         """
-        strats a thread with _continuous_publishing
+        starts a thread with _continuous_publishing
         """
         threading.Thread(target=self._continuous_publishing).start()
         logger.debug("FreifunkClient continuous_publishing_threaded started")
+
 
 if __name__ == "__main__":
 
