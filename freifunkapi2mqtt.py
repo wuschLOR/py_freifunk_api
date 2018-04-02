@@ -13,6 +13,8 @@ if sys.version_info[0] != 3:
 
 import requests
 import paho.mqtt.publish as mqttpublish
+import paho.mqtt.subscribe as mqttsubscribe
+from random import uniform
 import notify2
 import time
 import threading
@@ -62,11 +64,46 @@ PUBLISHING_CYCLE = 10  # every 5 minutes
 logger.info('defining config')
 
 
+class MQTTPublisher(object):
+    """
+    metaclass for publishing stuff
+    """
+    def __init__(self, mqtt_host='localhost', mqtt_raw_topic='freifunk2mqtt/{p.hardware}/{p.oid}/clients/'):
+        """
+        set the mqtt variables
+        """
+        self.mqtt_host = mqtt_host
+        self.mqtt_raw_topic = mqtt_raw_topic
+        logger.debug("MQTTPublisher initiated " + str(self.mqtt_raw_topic) + "@" + str(self.mqtt_host))
+
+    def verify_functionality(self):
+        """name
+        to test the correct function:
+        * subscribe to random topicapi_url_user_nodes
+        * publish some text to topic
+        * verify return
+        """
+        randnum_topic = uniform(1, 10)
+        randnum_check = uniform(1, 10)
+
+        #mqttsubscribe()
+        mqttpublish.single(topic="freifunk2mqtt/" + str(randnum_topic) + "/",
+                           payload=randnum_check,
+                           hostname=self.mqtt_host)
+
+        logger.info("MQTTPublisher verifying function with value " + str(randnum_check) + ' at topic ' + str(randnum_topic) + "@" + str(self.mqtt_host))
+
+    def publish_clients(self, node):
+        formatted_topic = self.mqtt_raw_topic.format(p=node)
+        mqttpublish.single(topic=formatted_topic,
+                           payload=node.clients,
+                           hostname=self.mqtt_host)
+
+
 class Node(object):
     """
     Turns a nodedictionary into a class
     """
-
     def __init__(self, oid, name, ipv6_fe80_addr, mac):
         # main info
         self.oid = int(oid)
@@ -77,6 +114,7 @@ class Node(object):
         self.user = None
         self.hood = None
         self.firmware = None
+        self.hardware = None
         self.contact = None
         self.hostname = None
         self.position_comment = None
@@ -92,6 +130,7 @@ class Node(object):
         self.user = node_api_response_json['user']
         self.hood = node_api_response_json['hood']
         self.firmware = node_api_response_json['firmware']
+        self.hardware = node_api_response_json['hardware'].replace("/", "")
         self.contact = node_api_response_json['contact']
         self.hostname = node_api_response_json['hostname']
         self.position_comment = node_api_response_json['position_comment']
@@ -208,6 +247,8 @@ class FreifunkClient(object):
         cycles through nodes and overrides current data with requested data
         """
         for i in range(0, len(self.nodes)):
+            logger.debug("FreifunkClient update_nodes node " + str(self.api_url_nodes.format(self.nodes[i].oid)))
+            logger.debug("FreifunkClient update_nodes node " + str(i))
             node_api_response = requests.get(
                 self.api_url_nodes.format(self.nodes[i].oid))
             self.nodes[i].extend_with_node_api_response(node_api_response)
@@ -215,7 +256,7 @@ class FreifunkClient(object):
         self.client_count = sum(
             node.clients for node in self.nodes if node.clients is not None)
 
-        logger.debug("FreifunkClient update_nodes " + str(self.self.nodes))
+        logger.debug("FreifunkClient update_nodes " + str(self.nodes))
 
     def _continuous_publishing(self):
         """
@@ -248,6 +289,9 @@ if __name__ == "__main__":
 
     logger.info("starting __main__")
     users = ['wu', 'wuex', 'backspace']
+
+    mp = MQTTPublisher()
+    mp.verify_functionality()
 
     # create clients ready for threading
     fffcl = []
