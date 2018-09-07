@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 # file logging
 fh = logging.FileHandler('spam.log')
-fh.setLevel(logging.ERROR)
+fh.setLevel(logging.DEBUG)
 # logger shell output
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
@@ -104,11 +104,11 @@ class Node(object):
     """
     Turns a nodedictionary into a class
     """
-    def __init__(self, oid, name, ipv6_fe80_addr, mac):
+    def __init__(self, oid, name, fe80_addr, mac):
         # main info
         self.oid = int(oid)
         self.name = name
-        self.ipv6_fe80_addr = ipv6_fe80_addr
+        self.fe80_addr = fe80_addr
         self.mac = mac
         # extended info
         self.user = None
@@ -186,12 +186,11 @@ class FreifunkClient(object):
         self.notifications_status = True
         logger.debug("FreifunkClient init_notifications " + str(self.username))
 
-    def init_mqtt(self, mqtt_host=MQTT_HOST, mqtt_path=MQTT_PATH):
+    def init_mqtt(self, publisher_object):
         """
         set the mqtt variables
         """
-        self.mqtt_host = MQTT_HOST
-        self.mqtt_path = mqtt_path
+        self.mqttpublisher=publisher_object
         self.mqtt_status = True
         logger.debug("FreifunkClient init_mqtt " + str(self.username))
 
@@ -207,7 +206,7 @@ class FreifunkClient(object):
             node = Node(
                 oid=node_item['oid'],
                 name=node_item['name'],
-                ipv6_fe80_addr=node_item['ipv6_fe80_addr'],
+                fe80_addr=node_item['fe80_addr'],
                 mac=node_item['mac'])
             self.nodes.append(node)
 
@@ -221,17 +220,9 @@ class FreifunkClient(object):
         * notifications
         """
         if self.mqtt_status:
-            mqttpublish.single(
-                self.mqtt_path.format(self.username, 'all', 'clients'),
-                self.client_count,
-                hostname=self.mqtt_host)
-            for i in range(0, len(self.nodes)):
-                mqttpublish.single(
-                    self.mqtt_path.format(self.username, self.nodes[i].oid,
-                                          'clients'),
-                    self.nodes[i].clients,
-                    hostname=self.mqtt_host)
-                logger.debug("FreifunkClient publish_clients " + str(self.mqtt_host)+ str(self.nodes[i].clients))
+            for node in self.nodes:
+                self.mqttpublisher.publish_clients(node)
+                logger.debug("FreifunkClient publish_clients")
 
         if self.notifications_status:
             n = notify2.Notification('current freifunk clients for {}'.format(
@@ -249,9 +240,11 @@ class FreifunkClient(object):
         for i in range(0, len(self.nodes)):
             logger.debug("FreifunkClient update_nodes node " + str(self.api_url_nodes.format(self.nodes[i].oid)))
             logger.debug("FreifunkClient update_nodes node " + str(i))
-            node_api_response = requests.get(
-                self.api_url_nodes.format(self.nodes[i].oid))
-            self.nodes[i].extend_with_node_api_response(node_api_response)
+            try:
+                node_api_response = requests.get(self.api_url_nodes.format(self.nodes[i].oid))
+                self.nodes[i].extend_with_node_api_response(node_api_response)
+            except:
+                logger.warning("FreifunkClient update_nodes failed with " + str(self.nodes[i]))
 
         self.client_count = sum(
             node.clients for node in self.nodes if node.clients is not None)
@@ -288,22 +281,23 @@ class FreifunkClient(object):
 if __name__ == "__main__":
 
     logger.info("starting __main__")
+    #users = ['backspace']
     users = ['wu', 'wuex', 'backspace']
 
     mp = MQTTPublisher()
     mp.verify_functionality()
 
     # create clients ready for threading
-    fffcl = []
+    fffclients = []
 
     for usr in users:
         cl = FreifunkClient(usr)
-        cl.init_mqtt()
+        cl.init_mqtt(mp)
         #cl.init_notifications()
         cl.fetch_user_node_data()
 
-        fffcl.append(cl)
+        fffclients.append(cl)
 
     # run threads
-    for cl in fffcl:
+    for cl in fffclients:
         cl.continuous_publishing_threaded()
