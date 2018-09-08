@@ -52,9 +52,10 @@ logger.info('reading config')
 
 FREIFUNKFRANKEN_USER_NODE_QUERRY_URL = "https://monitoring.freifunk-franken.de/api/routers_by_nickname/{}"
 FREIFUNKFRANKEN_NODE_QUERRY_URL = "https://monitoring.freifunk-franken.de/routers/{}?json"
-#            lacation/type/user/node_id/dataform
-MQTT_PATH = "world/fff/{}/{}/{}"
+
+MQTT_TOPIC = 'freifunk2mqtt/{p.user}/{p.oid}/clients/'
 MQTT_HOST = 'localhost'
+
 NOTIFICATIONS_TITLE = 'freifunkapi2mqtt'
 NOTIFICATIONS_FLUFF = 'current freifunk clients for {}'
 
@@ -68,7 +69,7 @@ class MQTTPublisher(object):
     """
     metaclass for publishing stuff
     """
-    def __init__(self, mqtt_host='localhost', mqtt_raw_topic='freifunk2mqtt/{p.hardware}/{p.oid}/clients/'):
+    def __init__(self, mqtt_host=MQTT_HOST, mqtt_raw_topic=MQTT_TOPIC):
         """
         set the mqtt variables
         """
@@ -83,15 +84,14 @@ class MQTTPublisher(object):
         * publish some text to topic
         * verify return
         """
-        randnum_topic = uniform(1, 10)
         randnum_check = uniform(1, 10)
 
         #mqttsubscribe()
-        mqttpublish.single(topic="freifunk2mqtt/" + str(randnum_topic) + "/",
+        mqttpublish.single(topic="freifunk2mqtt/" + 'TESTSTRING' + "/",
                            payload=randnum_check,
                            hostname=self.mqtt_host)
 
-        logger.info("MQTTPublisher verifying function with value " + str(randnum_check) + ' at topic ' + str(randnum_topic) + "@" + str(self.mqtt_host))
+        logger.info("MQTTPublisher verifying function with value " + str(randnum_check) + ' at topic ' + 'TESTSTRING' + "@" + str(self.mqtt_host))
 
     def publish_clients(self, node):
         formatted_topic = self.mqtt_raw_topic.format(p=node)
